@@ -36,3 +36,8 @@ flock.toml
 flock.db*
 
 .flock
+
+# Stenographer
+config.toml
+*.session
+stenographer

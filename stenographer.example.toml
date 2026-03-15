@@ -1,0 +1,14 @@
+[telegram]
+app_id = 12345
+app_hash = "your_api_hash_here"
+phone = "+11234567890"
+session_file = "stenographer.session"
+
+[database]
+path = "stenographer.db"
+
+[logging]
+level = "info"  # debug, info, warn, error
+
+[filter]
+mode = "blacklist"  # "blacklist" or "allowlist"
