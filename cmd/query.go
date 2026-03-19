@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
+	"github.com/nbitslabs/stenographer/internal/config"
 	"github.com/nbitslabs/stenographer/internal/database"
 	"github.com/nbitslabs/stenographer/internal/query"
 )
@@ -76,6 +78,11 @@ var queryRecentCmd = &cobra.Command{
 		}
 
 		formatter := query.NewFormatter(queryFormat, fields, os.Stdout)
+
+		if queryResolveNames {
+			setupNameResolver(formatter, cfg)
+		}
+
 		stats, err := formatter.FormatRows(rows)
 		if err != nil {
 			return err
@@ -142,6 +149,20 @@ func parseFields(s string) []string {
 		}
 	}
 	return fields
+}
+
+func setupNameResolver(formatter *query.Formatter, c *config.Config) {
+	formatter.SetNameResolver(func(ids []int64) (map[int64]string, error) {
+		if c == nil {
+			return nil, fmt.Errorf("config required for name resolution")
+		}
+		if _, err := os.Stat(c.Telegram.SessionFile); os.IsNotExist(err) {
+			return nil, fmt.Errorf("not authenticated, run 'stenographer run' first to log in")
+		}
+		log, _ := zap.NewProduction()
+		defer log.Sync()
+		return query.ResolveNames(context.Background(), c, ids, log)
+	})
 }
 
 func addQueryFlags(cmd *cobra.Command) {
