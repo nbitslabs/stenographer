@@ -37,6 +37,10 @@ func Execute() {
 	}
 }
 
+func loadConfig() (*config.Config, error) {
+	return config.Load(cfgFile)
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "config.toml", "config file path")
 }
