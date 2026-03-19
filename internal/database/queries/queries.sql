@@ -10,13 +10,25 @@ DO UPDATE SET
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 
 -- name: AddChatFilter :exec
-INSERT OR REPLACE INTO chat_filters (chat_id, chat_type, identifier, note) VALUES (?, ?, ?, ?);
+INSERT OR REPLACE INTO chat_filters (chat_id, chat_type, filter_type, identifier, note) VALUES (?, ?, ?, ?, ?);
 
 -- name: RemoveChatFilter :exec
+DELETE FROM chat_filters WHERE chat_id = ? AND filter_type = ?;
+
+-- name: RemoveChatFilterByID :exec
 DELETE FROM chat_filters WHERE chat_id = ?;
 
 -- name: ListChatFilters :many
 SELECT * FROM chat_filters ORDER BY created_at;
+
+-- name: ListChatFiltersByType :many
+SELECT * FROM chat_filters WHERE filter_type = ? ORDER BY created_at;
+
+-- name: IsWhitelisted :one
+SELECT count(*) FROM chat_filters WHERE chat_id = ? AND chat_type = ? AND filter_type = 'whitelist';
+
+-- name: IsBlacklisted :one
+SELECT count(*) FROM chat_filters WHERE chat_id = ? AND chat_type = ? AND filter_type = 'blacklist';
 
 -- name: IsChatFiltered :one
 SELECT count(*) FROM chat_filters WHERE chat_id = ?;

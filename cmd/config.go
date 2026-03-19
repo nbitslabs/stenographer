@@ -83,9 +83,10 @@ path = "{{.DatabasePath}}"
 level = "info"
 
 # Chat filter settings
-# mode: "blacklist" (log all except listed) or "allowlist" (log only listed)
+# mode: "default" (channels require whitelisting, groups/DMs logged unless blacklisted)
+#   or: "allowlist_only" (all chats must be explicitly whitelisted)
 [filter]
-mode = "blacklist"
+mode = "default"
 `))
 
 func init() {

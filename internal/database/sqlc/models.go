@@ -29,6 +29,7 @@ type ChatFilter struct {
 	ID         int64  `json:"id"`
 	ChatID     int64  `json:"chat_id"`
 	ChatType   string `json:"chat_type"`
+	FilterType string `json:"filter_type"`
 	Identifier string `json:"identifier"`
 	Note       string `json:"note"`
 	CreatedAt  string `json:"created_at"`

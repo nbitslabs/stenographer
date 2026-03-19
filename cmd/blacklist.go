@@ -26,7 +26,7 @@ var blacklistAddCmd = &cobra.Command{
 	Long:  "Add by chat ID (numeric), @username, or t.me link",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return addFilter(args)
+		return addFilter(args, "blacklist")
 	},
 }
 
@@ -35,7 +35,7 @@ var blacklistRemoveCmd = &cobra.Command{
 	Short: "Remove chat(s) from the blacklist",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return removeFilter(args)
+		return removeFilter(args, "blacklist")
 	},
 }
 
@@ -43,7 +43,7 @@ var blacklistListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all blacklisted chats",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return listFilters()
+		return listFilters("blacklist")
 	},
 }
 
@@ -54,7 +54,7 @@ func init() {
 	blacklistCmd.AddCommand(blacklistListCmd)
 }
 
-func addFilter(identifiers []string) error {
+func addFilter(identifiers []string, filterType string) error {
 	db, err := database.Open(cfg.Database.Path)
 	if err != nil {
 		return err
@@ -73,6 +73,7 @@ func addFilter(identifiers []string) error {
 		err = queries.AddChatFilter(context.Background(), sqlc.AddChatFilterParams{
 			ChatID:     chatID,
 			ChatType:   chatType,
+			FilterType: filterType,
 			Identifier: originalIdent,
 		})
 		if err != nil {
@@ -80,13 +81,13 @@ func addFilter(identifiers []string) error {
 			continue
 		}
 
-		fmt.Printf("added %s (chat_id=%d, type=%s)\n", originalIdent, chatID, chatType)
+		fmt.Printf("added %s (chat_id=%d, type=%s, filter=%s)\n", originalIdent, chatID, chatType, filterType)
 	}
 
 	return nil
 }
 
-func removeFilter(identifiers []string) error {
+func removeFilter(identifiers []string, filterType string) error {
 	db, err := database.Open(cfg.Database.Path)
 	if err != nil {
 		return err
@@ -102,19 +103,22 @@ func removeFilter(identifiers []string) error {
 			continue
 		}
 
-		err = queries.RemoveChatFilter(context.Background(), chatID)
+		err = queries.RemoveChatFilter(context.Background(), sqlc.RemoveChatFilterParams{
+			ChatID:     chatID,
+			FilterType: filterType,
+		})
 		if err != nil {
 			fmt.Printf("error removing %q: %v\n", ident, err)
 			continue
 		}
 
-		fmt.Printf("removed chat_id=%d\n", chatID)
+		fmt.Printf("removed chat_id=%d from %s\n", chatID, filterType)
 	}
 
 	return nil
 }
 
-func listFilters() error {
+func listFilters(filterType string) error {
 	db, err := database.Open(cfg.Database.Path)
 	if err != nil {
 		return err
@@ -123,7 +127,7 @@ func listFilters() error {
 
 	queries := sqlc.New(db)
 
-	filters, err := queries.ListChatFilters(context.Background())
+	filters, err := queries.ListChatFiltersByType(context.Background(), filterType)
 	if err != nil {
 		return err
 	}

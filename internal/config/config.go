@@ -41,7 +41,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Database: DatabaseConfig{Path: "stenographer.db"},
 		Logging:  LoggingConfig{Level: "info"},
-		Filter:   FilterConfig{Mode: "blacklist"},
+		Filter:   FilterConfig{Mode: "default"},
 		Telegram: TelegramConfig{SessionFile: "stenographer.session"},
 	}
 

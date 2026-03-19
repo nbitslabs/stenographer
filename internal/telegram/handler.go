@@ -50,7 +50,7 @@ func (h *MessageHandler) processMessage(ctx context.Context, e tg.Entities, msgC
 
 	chatID, chatType := extractPeer(msg.PeerID)
 
-	ok, err := h.filter.ShouldLog(ctx, chatID)
+	ok, err := h.filter.ShouldLog(ctx, chatID, chatType)
 	if err != nil {
 		h.log.Error("filter check failed", zap.Error(err))
 		return nil // don't block on filter errors

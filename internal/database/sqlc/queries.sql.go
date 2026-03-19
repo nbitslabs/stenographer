@@ -11,12 +11,13 @@ import (
 )
 
 const addChatFilter = `-- name: AddChatFilter :exec
-INSERT OR REPLACE INTO chat_filters (chat_id, chat_type, identifier, note) VALUES (?, ?, ?, ?)
+INSERT OR REPLACE INTO chat_filters (chat_id, chat_type, filter_type, identifier, note) VALUES (?, ?, ?, ?, ?)
 `
 
 type AddChatFilterParams struct {
 	ChatID     int64  `json:"chat_id"`
 	ChatType   string `json:"chat_type"`
+	FilterType string `json:"filter_type"`
 	Identifier string `json:"identifier"`
 	Note       string `json:"note"`
 }
@@ -25,6 +26,7 @@ func (q *Queries) AddChatFilter(ctx context.Context, arg AddChatFilterParams) er
 	_, err := q.db.ExecContext(ctx, addChatFilter,
 		arg.ChatID,
 		arg.ChatType,
+		arg.FilterType,
 		arg.Identifier,
 		arg.Note,
 	)
@@ -97,12 +99,44 @@ func (q *Queries) GetUpdateState(ctx context.Context, userID int64) (GetUpdateSt
 	return i, err
 }
 
+const isBlacklisted = `-- name: IsBlacklisted :one
+SELECT count(*) FROM chat_filters WHERE chat_id = ? AND chat_type = ? AND filter_type = 'blacklist'
+`
+
+type IsBlacklistedParams struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+}
+
+func (q *Queries) IsBlacklisted(ctx context.Context, arg IsBlacklistedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isBlacklisted, arg.ChatID, arg.ChatType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const isChatFiltered = `-- name: IsChatFiltered :one
 SELECT count(*) FROM chat_filters WHERE chat_id = ?
 `
 
 func (q *Queries) IsChatFiltered(ctx context.Context, chatID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, isChatFiltered, chatID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const isWhitelisted = `-- name: IsWhitelisted :one
+SELECT count(*) FROM chat_filters WHERE chat_id = ? AND chat_type = ? AND filter_type = 'whitelist'
+`
+
+type IsWhitelistedParams struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+}
+
+func (q *Queries) IsWhitelisted(ctx context.Context, arg IsWhitelistedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isWhitelisted, arg.ChatID, arg.ChatType)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -141,7 +175,7 @@ func (q *Queries) ListChannelStates(ctx context.Context, userID int64) ([]ListCh
 }
 
 const listChatFilters = `-- name: ListChatFilters :many
-SELECT id, chat_id, chat_type, identifier, note, created_at FROM chat_filters ORDER BY created_at
+SELECT id, chat_id, chat_type, filter_type, identifier, note, created_at FROM chat_filters ORDER BY created_at
 `
 
 func (q *Queries) ListChatFilters(ctx context.Context) ([]ChatFilter, error) {
@@ -157,6 +191,42 @@ func (q *Queries) ListChatFilters(ctx context.Context) ([]ChatFilter, error) {
 			&i.ID,
 			&i.ChatID,
 			&i.ChatType,
+			&i.FilterType,
+			&i.Identifier,
+			&i.Note,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChatFiltersByType = `-- name: ListChatFiltersByType :many
+SELECT id, chat_id, chat_type, filter_type, identifier, note, created_at FROM chat_filters WHERE filter_type = ? ORDER BY created_at
+`
+
+func (q *Queries) ListChatFiltersByType(ctx context.Context, filterType string) ([]ChatFilter, error) {
+	rows, err := q.db.QueryContext(ctx, listChatFiltersByType, filterType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChatFilter{}
+	for rows.Next() {
+		var i ChatFilter
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.ChatType,
+			&i.FilterType,
 			&i.Identifier,
 			&i.Note,
 			&i.CreatedAt,
@@ -175,11 +245,25 @@ func (q *Queries) ListChatFilters(ctx context.Context) ([]ChatFilter, error) {
 }
 
 const removeChatFilter = `-- name: RemoveChatFilter :exec
+DELETE FROM chat_filters WHERE chat_id = ? AND filter_type = ?
+`
+
+type RemoveChatFilterParams struct {
+	ChatID     int64  `json:"chat_id"`
+	FilterType string `json:"filter_type"`
+}
+
+func (q *Queries) RemoveChatFilter(ctx context.Context, arg RemoveChatFilterParams) error {
+	_, err := q.db.ExecContext(ctx, removeChatFilter, arg.ChatID, arg.FilterType)
+	return err
+}
+
+const removeChatFilterByID = `-- name: RemoveChatFilterByID :exec
 DELETE FROM chat_filters WHERE chat_id = ?
 `
 
-func (q *Queries) RemoveChatFilter(ctx context.Context, chatID int64) error {
-	_, err := q.db.ExecContext(ctx, removeChatFilter, chatID)
+func (q *Queries) RemoveChatFilterByID(ctx context.Context, chatID int64) error {
+	_, err := q.db.ExecContext(ctx, removeChatFilterByID, chatID)
 	return err
 }
 

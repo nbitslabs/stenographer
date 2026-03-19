@@ -109,17 +109,28 @@ stenographer query sql "SELECT chat_id, count(*) as n FROM messages GROUP BY cha
 
 ### Chat filtering
 
-Control which chats are logged:
+Two filter modes are available (set `mode` in `[filter]` config section):
+
+**Default mode** (`mode = "default"`): Channels require explicit whitelisting. Groups and 1:1 chats are logged unless blacklisted.
 
 ```sh
-# Blacklist mode (default): log all except listed
-stenographer blacklist add -1001234567890
-stenographer blacklist add @username
-stenographer blacklist list
-
-# Allowlist mode: log only listed
-# Set mode = "allowlist" in config.toml
+# Whitelist a channel (required in default mode)
 stenographer allowlist add -1001234567890
+stenographer allowlist add @channelname
+
+# Blacklist a group or user to stop logging it
+stenographer blacklist add -1009876543210
+
+# List entries
+stenographer allowlist list
+stenographer blacklist list
+```
+
+**Allowlist-only mode** (`mode = "allowlist_only"`): All chats must be explicitly whitelisted.
+
+```sh
+stenographer allowlist add -1001234567890
+stenographer allowlist add @username
 ```
 
 ### Service management
@@ -150,7 +161,7 @@ path = "~/.config/stenographer/stenographer.db"
 level = "info"  # debug, info, warn, error
 
 [filter]
-mode = "blacklist"  # blacklist or allowlist
+mode = "default"  # "default" or "allowlist_only"
 ```
 
 ## License
