@@ -35,7 +35,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
         run: |
-          go build -ldflags="-s -w" -o stenographer-${{ matrix.goos }}-${{ matrix.goarch }} .
+          go build -ldflags="-s -w -X github.com/nbitslabs/stenographer/cmd.Version=${GITHUB_REF_NAME}" -o stenographer-${{ matrix.goos }}-${{ matrix.goarch }} .
 
       - uses: actions/upload-artifact@v4
         with:

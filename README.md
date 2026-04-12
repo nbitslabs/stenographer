@@ -27,12 +27,32 @@ export STENOGRAPHER_PHONE=+1234567890
 curl -fsSL https://raw.githubusercontent.com/nbitslabs/stenographer/main/install.sh | sh
 ```
 
+### Updating
+
+Using the install script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nbitslabs/stenographer/main/install.sh | sh -s -- --update
+```
+
+Or using the built-in update command:
+
+```sh
+stenographer update
+```
+
+Use `--unattended` to skip the confirmation prompt (useful for scripts):
+
+```sh
+stenographer update --unattended
+```
+
 ### Build from source
 
 ```sh
 git clone https://github.com/nbitslabs/stenographer.git
 cd stenographer
-go build -o stenographer .
+go build -ldflags="-X github.com/nbitslabs/stenographer/cmd.Version=vX.Y.Z" -o stenographer .
 ```
 
 ## Setup

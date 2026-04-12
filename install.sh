@@ -1,8 +1,10 @@
 #!/bin/sh
-# Stenographer installation script
-# Usage: curl -fsSL https://raw.githubusercontent.com/nbitslabs/stenographer/main/install.sh | sh
+# Stenographer install / update script
+# Usage:
+#   Install:  curl -fsSL https://raw.githubusercontent.com/nbitslabs/stenographer/main/install.sh | sh
+#   Update:   curl -fsSL https://raw.githubusercontent.com/nbitslabs/stenographer/main/install.sh | sh -s -- --update
 #
-# Environment variables for non-interactive mode:
+# Environment variables for non-interactive install:
 #   STENOGRAPHER_APP_ID    - Telegram App ID (numeric)
 #   STENOGRAPHER_APP_HASH  - Telegram App Hash (alphanumeric)
 #   STENOGRAPHER_PHONE     - Phone number in E.164 format (+1234567890)
@@ -12,6 +14,14 @@ set -e
 
 REPO="nbitslabs/stenographer"
 BINARY_NAME="stenographer"
+UPDATE_ONLY=false
+
+# Parse arguments
+for arg in "$@"; do
+    case "$arg" in
+        --update) UPDATE_ONLY=true ;;
+    esac
+done
 
 # --- Helpers ---
 
@@ -54,6 +64,28 @@ get_latest_version() {
     info "Latest version: ${VERSION}"
 }
 
+# --- Installed version check ---
+
+check_installed_version() {
+    EXISTING=$(command -v "$BINARY_NAME" 2>/dev/null || true)
+    if [ -z "$EXISTING" ]; then
+        if [ "$UPDATE_ONLY" = true ]; then
+            fatal "Stenographer is not installed. Run without --update to install."
+        fi
+        return
+    fi
+
+    CURRENT=$("$EXISTING" version 2>/dev/null || echo "unknown")
+    info "Installed version: ${CURRENT}"
+
+    if [ "$CURRENT" = "$VERSION" ]; then
+        ok "Already up to date (${VERSION})"
+        exit 0
+    fi
+
+    info "Upgrading ${CURRENT} → ${VERSION}"
+}
+
 # --- Binary download ---
 
 download_binary() {
@@ -73,15 +105,21 @@ download_binary() {
 # --- Binary installation ---
 
 install_binary() {
-    INSTALL_DIR="/usr/local/bin"
-    INSTALL_PATH="${INSTALL_DIR}/${BINARY_NAME}"
+    # If updating and we know where the existing binary lives, replace it there.
+    if [ -n "$EXISTING" ]; then
+        INSTALL_DIR=$(dirname "$EXISTING")
+        INSTALL_PATH="$EXISTING"
+    else
+        INSTALL_DIR="/usr/local/bin"
+        INSTALL_PATH="${INSTALL_DIR}/${BINARY_NAME}"
+    fi
 
     if [ -w "$INSTALL_DIR" ]; then
         mv "$TMPFILE" "$INSTALL_PATH"
         chmod +x "$INSTALL_PATH"
     else
         printf "  Need sudo access to install to %s. Continue? [Y/n] " "$INSTALL_DIR"
-        if [ -n "$STENOGRAPHER_APP_ID" ]; then
+        if [ -n "$STENOGRAPHER_APP_ID" ] || [ "$UPDATE_ONLY" = true ]; then
             # Non-interactive mode: assume yes
             printf "y (non-interactive)\n"
             CONFIRM="y"
@@ -232,36 +270,49 @@ generate_config() {
 # --- Verification ---
 
 verify_install() {
-    if "$INSTALL_PATH" --version >/dev/null 2>&1; then
-        ok "Verified: $("$INSTALL_PATH" --version 2>&1 || echo "$INSTALL_PATH")"
+    INSTALLED_VERSION=$("$INSTALL_PATH" version 2>&1 || true)
+    if [ -n "$INSTALLED_VERSION" ]; then
+        ok "Verified: ${INSTALLED_VERSION}"
     else
-        ok "Binary installed (--version not yet supported)"
+        ok "Binary installed"
     fi
 }
 
 # --- Main ---
 
 main() {
-    printf "\n  Stenographer Installer\n"
-    printf "  ======================\n\n"
+    if [ "$UPDATE_ONLY" = true ]; then
+        printf "\n  Stenographer Updater\n"
+        printf "  ====================\n\n"
+    else
+        printf "\n  Stenographer Installer\n"
+        printf "  ======================\n\n"
+    fi
 
     detect_platform
     get_latest_version
+    check_installed_version
     download_binary
     install_binary
-    setup_directories
-    collect_credentials
-    generate_config
-    verify_install
 
-    printf "\n  ✓ Stenographer installed successfully!\n"
-    printf "  Installed to: %s\n" "$INSTALL_PATH"
-    printf "  Config: %s\n\n" "${CONFIG_DIR}/config.toml"
-    printf "  Next steps:\n"
-    printf "    1. Authenticate:              stenographer run\n"
-    printf "       (complete the login flow, then Ctrl-C)\n"
-    printf "    2. Set up background service:  stenographer service install && stenographer service start\n"
-    printf "\n  Documentation: https://github.com/${REPO}#readme\n\n"
+    if [ "$UPDATE_ONLY" = true ]; then
+        verify_install
+        printf "\n  ✓ Stenographer updated successfully!\n\n"
+    else
+        setup_directories
+        collect_credentials
+        generate_config
+        verify_install
+
+        printf "\n  ✓ Stenographer installed successfully!\n"
+        printf "  Installed to: %s\n" "$INSTALL_PATH"
+        printf "  Config: %s\n\n" "${CONFIG_DIR}/config.toml"
+        printf "  Next steps:\n"
+        printf "    1. Authenticate:              stenographer run\n"
+        printf "       (complete the login flow, then Ctrl-C)\n"
+        printf "    2. Set up background service:  stenographer service install && stenographer service start\n"
+        printf "\n  Documentation: https://github.com/${REPO}#readme\n\n"
+    fi
 }
 
 main
