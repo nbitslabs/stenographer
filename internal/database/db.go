@@ -19,6 +19,11 @@ func Open(path string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// SQLite supports only one concurrent writer. Limiting to a single
+	// connection serialises all writes through Go's database/sql mutex,
+	// which avoids SQLITE_BUSY under heavy concurrent goroutine access.
+	db.SetMaxOpenConns(1)
+
 	// SQLite pragmas for performance and correctness.
 	for _, pragma := range []string{
 		"PRAGMA journal_mode=WAL",
