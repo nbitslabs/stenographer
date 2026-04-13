@@ -190,7 +190,7 @@ func (s *Server) resolveNames(ctx context.Context) (int, error) {
 		id   int64
 		typ  string
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT chat_id, chat_type FROM messages`)
+	rows, err := s.db.QueryContext(ctx, `SELECT chat_id, chat_type FROM chats`)
 	if err != nil {
 		return 0, fmt.Errorf("query chat IDs: %w", err)
 	}
@@ -355,37 +355,40 @@ func (s *Server) resolveNames(ctx context.Context) (int, error) {
 
 const listChatsQuery = `
 SELECT
-    m.chat_id,
-    m.chat_type,
+    c.chat_id,
+    c.chat_type,
     COALESCE(c.title, '') AS title,
     COALESCE(c.username, '') AS username,
-    COUNT(*) AS message_count,
-    MAX(m.date) AS last_message_date,
+    COALESCE(msg.message_count, 0) AS message_count,
+    COALESCE(msg.last_message_date, 0) AS last_message_date,
     COALESCE(
         (SELECT m2.message_text FROM messages m2
-         WHERE m2.chat_id = m.chat_id AND m2.chat_type = m.chat_type
+         WHERE m2.chat_id = c.chat_id AND m2.chat_type = c.chat_type
            AND m2.message_text != ''
          ORDER BY m2.date DESC LIMIT 1),
         ''
     ) AS last_message,
     COALESCE(
         (SELECT cf.filter_type FROM chat_filters cf
-         WHERE cf.chat_id = m.chat_id AND cf.filter_type = 'whitelist' LIMIT 1),
+         WHERE cf.chat_id = c.chat_id AND cf.filter_type = 'whitelist' LIMIT 1),
         ''
     ) AS whitelist_status,
     COALESCE(
         (SELECT cf.filter_type FROM chat_filters cf
-         WHERE cf.chat_id = m.chat_id AND cf.filter_type = 'blacklist' LIMIT 1),
+         WHERE cf.chat_id = c.chat_id AND cf.filter_type = 'blacklist' LIMIT 1),
         ''
     ) AS blacklist_status,
     COALESCE(
         (SELECT cf.identifier FROM chat_filters cf
-         WHERE cf.chat_id = m.chat_id LIMIT 1),
+         WHERE cf.chat_id = c.chat_id LIMIT 1),
         ''
     ) AS filter_identifier
-FROM messages m
-LEFT JOIN chats c ON c.chat_id = m.chat_id AND c.chat_type = m.chat_type
-GROUP BY m.chat_id, m.chat_type
+FROM chats c
+LEFT JOIN (
+    SELECT chat_id, chat_type, COUNT(*) AS message_count, MAX(date) AS last_message_date
+    FROM messages
+    GROUP BY chat_id, chat_type
+) msg ON msg.chat_id = c.chat_id AND msg.chat_type = c.chat_type
 ORDER BY last_message_date DESC
 `
 

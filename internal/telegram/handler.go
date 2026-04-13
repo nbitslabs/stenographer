@@ -50,6 +50,13 @@ func (h *MessageHandler) processMessage(ctx context.Context, e tg.Entities, msgC
 
 	chatID, chatType := extractPeer(msg.PeerID)
 
+	// Always record the chat so the web UI can show all known chats,
+	// even those filtered out. Ignore errors — this is best-effort.
+	_ = h.queries.UpsertChat(ctx, sqlc.UpsertChatParams{
+		ChatID:   chatID,
+		ChatType: chatType,
+	})
+
 	ok, err := h.filter.ShouldLog(ctx, chatID, chatType)
 	if err != nil {
 		h.log.Error("filter check failed", zap.Error(err))
