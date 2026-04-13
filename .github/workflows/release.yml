@@ -10,18 +10,22 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            runner: ubuntu-latest
           - goos: linux
             goarch: arm64
+            runner: ubuntu-latest
           - goos: darwin
             goarch: amd64
+            runner: macos-latest
           - goos: darwin
             goarch: arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +40,10 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           go build -ldflags="-s -w -X github.com/nbitslabs/stenographer/cmd.Version=${GITHUB_REF_NAME}" -o stenographer-${{ matrix.goos }}-${{ matrix.goarch }} .
+
+      - name: Ad-hoc codesign macOS binary
+        if: matrix.goos == 'darwin'
+        run: codesign -s - stenographer-${{ matrix.goos }}-${{ matrix.goarch }}
 
       - uses: actions/upload-artifact@v4
         with:
