@@ -1,10 +1,14 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
+
+const configFileName = "config.toml"
 
 type Config struct {
 	Telegram TelegramConfig `toml:"telegram"`
@@ -30,6 +34,35 @@ type LoggingConfig struct {
 
 type FilterConfig struct {
 	Mode string `toml:"mode"`
+}
+
+// DefaultSearchPaths returns the ordered list of directories to search for config.toml.
+func DefaultSearchPaths() []string {
+	paths := []string{"."}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		paths = append(paths,
+			filepath.Join(home, ".config", "stenographer"),
+			filepath.Join(home, ".stenographer"),
+		)
+	}
+
+	paths = append(paths, filepath.Join("/etc", "stenographer"))
+
+	return paths
+}
+
+// FindConfig searches the default locations for a config file and returns
+// the path to the first one found. Returns an error if none is found.
+func FindConfig() (string, error) {
+	for _, dir := range DefaultSearchPaths() {
+		p := filepath.Join(dir, configFileName)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("config file not found; searched: %v", DefaultSearchPaths())
 }
 
 func Load(path string) (*Config, error) {

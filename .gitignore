@@ -13,6 +13,7 @@ fundbot
 vendor/
 
 # IDE
+.claude/
 .idea/
 .vscode/
 *.swp
@@ -41,3 +42,5 @@ flock.db*
 config.toml
 *.session
 stenographer
+stenographer.toml
+.mcp.json

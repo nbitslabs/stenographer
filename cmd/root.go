@@ -22,6 +22,16 @@ var rootCmd = &cobra.Command{
 		if cmd.Name() == "help" {
 			return nil
 		}
+
+		// If the user didn't explicitly pass --config, search default locations.
+		if !cmd.Flags().Changed("config") {
+			found, err := config.FindConfig()
+			if err != nil {
+				return err
+			}
+			cfgFile = found
+		}
+
 		var err error
 		cfg, err = config.Load(cfgFile)
 		if err != nil {
@@ -42,5 +52,5 @@ func loadConfig() (*config.Config, error) {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "config.toml", "config file path")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path (default: search ./config.toml, ~/.config/stenographer/, ~/.stenographer/, /etc/stenographer/)")
 }
