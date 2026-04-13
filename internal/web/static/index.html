@@ -17,12 +17,20 @@
     line-height: 1.5; padding: 24px; max-width: 1200px; margin: 0 auto;
   }
   h1 { font-size: 24px; margin-bottom: 8px; }
-  .header { margin-bottom: 24px; }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
   .mode-badge {
     display: inline-block; padding: 2px 10px; border-radius: 12px;
     font-size: 12px; font-weight: 600; text-transform: uppercase;
     background: #1f2937; border: 1px solid var(--border);
   }
+  .btn-resolve {
+    margin-left: auto; padding: 6px 16px; border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--accent); background: transparent;
+    color: var(--accent); transition: 0.15s;
+  }
+  .btn-resolve:hover { background: #1a2a40; }
+  .btn-resolve:disabled { opacity: 0.5; cursor: not-allowed; }
   .toolbar {
     display: flex; gap: 12px; align-items: center;
     margin-bottom: 16px; flex-wrap: wrap;
@@ -58,7 +66,15 @@
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #1c2129; }
-  .chat-id { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; }
+  .chat-name {
+    font-weight: 600; display: block;
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chat-meta {
+    font-family: 'SF Mono', Monaco, monospace; font-size: 11px;
+    color: var(--text-muted); display: block;
+  }
+  .chat-username { color: var(--accent); font-size: 12px; }
   .type-badge {
     display: inline-block; padding: 1px 8px; border-radius: 10px;
     font-size: 11px; font-weight: 600; text-transform: uppercase;
@@ -70,7 +86,7 @@
   .status-ignored { color: var(--text-dim); }
   .status-detail { font-size: 11px; color: var(--text-muted); display: block; }
   .preview {
-    max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+    max-width: 250px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; color: var(--text-muted); font-size: 13px;
   }
   .actions { white-space: nowrap; }
@@ -107,6 +123,16 @@
   .dot-tracked { background: var(--green); }
   .dot-ignored { background: var(--text-dim); }
   .time-ago { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 10px 20px;
+    border-radius: 8px; font-size: 14px; font-weight: 600;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
 </style>
 </head>
 <body>
@@ -114,12 +140,13 @@
 <div class="header">
   <h1>Stenographer</h1>
   <span class="mode-badge" id="modeBadge">loading...</span>
+  <button class="btn-resolve" id="resolveBtn" onclick="resolveNames()">Resolve Names</button>
 </div>
 
 <div class="legend" id="legend"></div>
 
 <div class="toolbar">
-  <input type="text" id="search" placeholder="Search by chat ID or message...">
+  <input type="text" id="search" placeholder="Search by name, ID, or message...">
   <select id="typeFilter">
     <option value="">All types</option>
     <option value="user">Users</option>
@@ -137,7 +164,7 @@
 <table>
   <thead>
     <tr>
-      <th data-sort="chat_id">Chat ID</th>
+      <th data-sort="title">Chat</th>
       <th data-sort="chat_type">Type</th>
       <th data-sort="message_count">Messages</th>
       <th data-sort="last_message_date">Last Active</th>
@@ -151,11 +178,20 @@
   </tbody>
 </table>
 
+<div class="toast" id="toast"></div>
+
 <script>
 let allChats = [];
 let filterMode = 'default';
 let sortKey = 'last_message_date';
 let sortDir = 'desc';
+
+function showToast(message, type) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show ' + type;
+  setTimeout(() => toast.className = 'toast', 3000);
+}
 
 async function fetchConfig() {
   const resp = await fetch('/api/config');
@@ -186,6 +222,28 @@ async function fetchChats() {
   render();
 }
 
+async function resolveNames() {
+  const btn = document.getElementById('resolveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Resolving...';
+  try {
+    const resp = await fetch('/api/chats/resolve', { method: 'POST' });
+    if (!resp.ok) {
+      const text = await resp.text();
+      showToast('Failed: ' + text, 'error');
+      return;
+    }
+    const data = await resp.json();
+    showToast('Resolved ' + data.resolved + ' chat names', 'success');
+    await fetchChats();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Resolve Names';
+  }
+}
+
 function timeAgo(epoch) {
   if (!epoch) return '';
   const diff = Math.floor(Date.now() / 1000) - epoch;
@@ -200,6 +258,18 @@ function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function getChatLabel(chat) {
+  let html = '';
+  if (chat.title) {
+    html += `<span class="chat-name" title="${escapeHtml(chat.title)}">${escapeHtml(chat.title)}</span>`;
+  }
+  if (chat.username) {
+    html += `<span class="chat-username">@${escapeHtml(chat.username)}</span> `;
+  }
+  html += `<span class="chat-meta">${chat.chat_id}</span>`;
+  return html;
 }
 
 function getStatusLabel(chat) {
@@ -221,27 +291,22 @@ function getActions(chat) {
   const btns = [];
 
   if (filterMode === 'allowlist_only') {
-    // Allowlist-only: toggle whitelist on/off.
     if (chat.is_whitelisted) {
       btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to remove">Tracking</button>`);
     } else {
       btns.push(`<button class="btn btn-track" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','whitelist')" title="Add to whitelist to start tracking">Track</button>`);
     }
   } else {
-    // Default mode.
     if (chat.chat_type === 'channel') {
-      // Channels: whitelist to track, remove to ignore.
       if (chat.is_whitelisted) {
         btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to remove">Tracking</button>`);
       } else {
         btns.push(`<button class="btn btn-track" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','whitelist')" title="Whitelist to start tracking">Track</button>`);
       }
     } else {
-      // Groups/users: tracked by default, blacklist to ignore.
       if (chat.is_blacklisted) {
         btns.push(`<button class="btn btn-active-ignore" onclick="clearFilter(${chat.chat_id})" title="Currently blacklisted - click to unblock">Blocked</button>`);
       } else if (chat.is_whitelisted) {
-        // Explicitly whitelisted (unusual in default mode but possible).
         btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to return to default">Tracking</button>`);
       } else {
         btns.push(`<button class="btn btn-ignore" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','blacklist')" title="Blacklist to stop tracking">Block</button>`);
@@ -263,9 +328,12 @@ function filterChats() {
     if (statusF === 'ignored' && c.is_tracked) return false;
     if (search) {
       const idStr = String(c.chat_id);
+      const title = (c.title || '').toLowerCase();
+      const username = (c.username || '').toLowerCase();
       const msg = (c.last_message || '').toLowerCase();
       const ident = (c.filter_identifier || '').toLowerCase();
-      if (!idStr.includes(search) && !msg.includes(search) && !ident.includes(search)) return false;
+      if (!idStr.includes(search) && !title.includes(search) && !username.includes(search)
+          && !msg.includes(search) && !ident.includes(search)) return false;
     }
     return true;
   });
@@ -274,6 +342,11 @@ function filterChats() {
 function sortChats(chats) {
   return [...chats].sort((a, b) => {
     let av = a[sortKey], bv = b[sortKey];
+    // For title sort, fall back to chat_id when title is empty.
+    if (sortKey === 'title') {
+      av = av || String(a.chat_id);
+      bv = bv || String(b.chat_id);
+    }
     if (typeof av === 'string') av = av.toLowerCase();
     if (typeof bv === 'string') bv = bv.toLowerCase();
     if (typeof av === 'boolean') { av = av ? 1 : 0; bv = bv ? 1 : 0; }
@@ -290,10 +363,10 @@ function render() {
 
   const tracked = allChats.filter(c => c.is_tracked).length;
   const ignored = allChats.length - tracked;
+  const named = allChats.filter(c => c.title).length;
   document.getElementById('stats').textContent =
-    `${allChats.length} chats (${tracked} tracked, ${ignored} ignored) \u00b7 showing ${filtered.length}`;
+    `${allChats.length} chats (${tracked} tracked, ${ignored} ignored, ${named} named) \u00b7 showing ${filtered.length}`;
 
-  // Update sort indicators.
   document.querySelectorAll('thead th').forEach(th => {
     th.classList.remove('sorted-asc', 'sorted-desc');
     if (th.dataset.sort === sortKey) {
@@ -308,7 +381,7 @@ function render() {
 
   tbody.innerHTML = filtered.map(c => `
     <tr>
-      <td class="chat-id">${c.chat_id}</td>
+      <td>${getChatLabel(c)}</td>
       <td><span class="type-badge type-${c.chat_type}">${c.chat_type}</span></td>
       <td class="msg-count">${c.message_count.toLocaleString()}</td>
       <td class="time-ago" title="${new Date(c.last_message_date * 1000).toLocaleString()}">${timeAgo(c.last_message_date)}</td>

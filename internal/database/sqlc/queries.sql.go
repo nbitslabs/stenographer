@@ -76,6 +76,34 @@ func (q *Queries) GetChannelPts(ctx context.Context, arg GetChannelPtsParams) (i
 	return pts, err
 }
 
+const getChat = `-- name: GetChat :one
+SELECT chat_id, chat_type, title, username FROM chats WHERE chat_id = ? AND chat_type = ?
+`
+
+type GetChatParams struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+}
+
+type GetChatRow struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+	Title    string `json:"title"`
+	Username string `json:"username"`
+}
+
+func (q *Queries) GetChat(ctx context.Context, arg GetChatParams) (GetChatRow, error) {
+	row := q.db.QueryRowContext(ctx, getChat, arg.ChatID, arg.ChatType)
+	var i GetChatRow
+	err := row.Scan(
+		&i.ChatID,
+		&i.ChatType,
+		&i.Title,
+		&i.Username,
+	)
+	return i, err
+}
+
 const getUpdateState = `-- name: GetUpdateState :one
 SELECT pts, qts, date, seq FROM update_state WHERE user_id = ?
 `
@@ -244,6 +272,45 @@ func (q *Queries) ListChatFiltersByType(ctx context.Context, filterType string) 
 	return items, nil
 }
 
+const listChats = `-- name: ListChats :many
+SELECT chat_id, chat_type, title, username FROM chats ORDER BY chat_id
+`
+
+type ListChatsRow struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+	Title    string `json:"title"`
+	Username string `json:"username"`
+}
+
+func (q *Queries) ListChats(ctx context.Context) ([]ListChatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChatsRow{}
+	for rows.Next() {
+		var i ListChatsRow
+		if err := rows.Scan(
+			&i.ChatID,
+			&i.ChatType,
+			&i.Title,
+			&i.Username,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeChatFilter = `-- name: RemoveChatFilter :exec
 DELETE FROM chat_filters WHERE chat_id = ? AND filter_type = ?
 `
@@ -374,6 +441,33 @@ type UpsertChannelPtsParams struct {
 
 func (q *Queries) UpsertChannelPts(ctx context.Context, arg UpsertChannelPtsParams) error {
 	_, err := q.db.ExecContext(ctx, upsertChannelPts, arg.UserID, arg.ChannelID, arg.Pts)
+	return err
+}
+
+const upsertChat = `-- name: UpsertChat :exec
+INSERT INTO chats (chat_id, chat_type, title, username, updated_at)
+VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+ON CONFLICT(chat_id, chat_type)
+DO UPDATE SET
+    title = excluded.title,
+    username = excluded.username,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+`
+
+type UpsertChatParams struct {
+	ChatID   int64  `json:"chat_id"`
+	ChatType string `json:"chat_type"`
+	Title    string `json:"title"`
+	Username string `json:"username"`
+}
+
+func (q *Queries) UpsertChat(ctx context.Context, arg UpsertChatParams) error {
+	_, err := q.db.ExecContext(ctx, upsertChat,
+		arg.ChatID,
+		arg.ChatType,
+		arg.Title,
+		arg.Username,
+	)
 	return err
 }
 

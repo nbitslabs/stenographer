@@ -25,6 +25,14 @@ type ChannelState struct {
 	Pts       int64 `json:"pts"`
 }
 
+type Chat struct {
+	ChatID    int64  `json:"chat_id"`
+	ChatType  string `json:"chat_type"`
+	Title     string `json:"title"`
+	Username  string `json:"username"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type ChatFilter struct {
 	ID         int64  `json:"id"`
 	ChatID     int64  `json:"chat_id"`

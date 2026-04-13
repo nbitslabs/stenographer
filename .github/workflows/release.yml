@@ -43,7 +43,7 @@ jobs:
 
       - name: Ad-hoc codesign macOS binary
         if: matrix.goos == 'darwin'
-        run: codesign -s - stenographer-${{ matrix.goos }}-${{ matrix.goarch }}
+        run: codesign -s - --options runtime stenographer-${{ matrix.goos }}-${{ matrix.goarch }}
 
       - uses: actions/upload-artifact@v4
         with:

@@ -74,3 +74,18 @@ SELECT access_hash FROM channel_access_hash WHERE user_id = ? AND channel_id = ?
 
 -- name: UpsertChannelAccessHash :exec
 INSERT OR REPLACE INTO channel_access_hash (user_id, channel_id, access_hash) VALUES (?, ?, ?);
+
+-- name: UpsertChat :exec
+INSERT INTO chats (chat_id, chat_type, title, username, updated_at)
+VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+ON CONFLICT(chat_id, chat_type)
+DO UPDATE SET
+    title = excluded.title,
+    username = excluded.username,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+
+-- name: GetChat :one
+SELECT chat_id, chat_type, title, username FROM chats WHERE chat_id = ? AND chat_type = ?;
+
+-- name: ListChats :many
+SELECT chat_id, chat_type, title, username FROM chats ORDER BY chat_id;
