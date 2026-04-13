@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stenographer</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-muted: #8b949e; --text-dim: #484f58;
+    --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.5; padding: 24px; max-width: 1200px; margin: 0 auto;
+  }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .header { margin-bottom: 24px; }
+  .mode-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    background: #1f2937; border: 1px solid var(--border);
+  }
+  .toolbar {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .toolbar input[type="text"] {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 6px; font-size: 14px; width: 300px;
+  }
+  .toolbar select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 6px; font-size: 14px;
+  }
+  .stats {
+    font-size: 13px; color: var(--text-muted); margin-left: auto;
+  }
+  table {
+    width: 100%; border-collapse: collapse; background: var(--surface);
+    border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+  }
+  thead th {
+    text-align: left; padding: 10px 14px; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-muted); border-bottom: 1px solid var(--border);
+    background: var(--surface); cursor: pointer; user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted-asc::after { content: ' \25B2'; }
+  thead th.sorted-desc::after { content: ' \25BC'; }
+  tbody td {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-size: 14px; vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #1c2129; }
+  .chat-id { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; }
+  .type-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+  }
+  .type-user { background: #1a3a5c; color: #58a6ff; }
+  .type-chat { background: #1a3c2a; color: #3fb950; }
+  .type-channel { background: #3b2a1a; color: #d29922; }
+  .status-tracked { color: var(--green); font-weight: 600; }
+  .status-ignored { color: var(--text-dim); }
+  .status-detail { font-size: 11px; color: var(--text-muted); display: block; }
+  .preview {
+    max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--text-muted); font-size: 13px;
+  }
+  .actions { white-space: nowrap; }
+  .btn {
+    display: inline-block; padding: 4px 12px; border-radius: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); transition: 0.15s;
+  }
+  .btn:hover { background: #21262d; }
+  .btn-track { border-color: var(--green); color: var(--green); }
+  .btn-track:hover { background: #0d2818; }
+  .btn-ignore { border-color: var(--red); color: var(--red); }
+  .btn-ignore:hover { background: #2d0c0c; }
+  .btn-clear { border-color: var(--text-dim); color: var(--text-muted); }
+  .btn-active {
+    background: var(--green) !important; color: #0d1117 !important;
+    border-color: var(--green) !important;
+  }
+  .btn-active-ignore {
+    background: var(--red) !important; color: #0d1117 !important;
+    border-color: var(--red) !important;
+  }
+  .msg-count { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; }
+  .loading { text-align: center; padding: 48px; color: var(--text-muted); }
+  .legend {
+    display: flex; gap: 16px; margin-bottom: 16px;
+    font-size: 13px; color: var(--text-muted); flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .dot-tracked { background: var(--green); }
+  .dot-ignored { background: var(--text-dim); }
+  .time-ago { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Stenographer</h1>
+  <span class="mode-badge" id="modeBadge">loading...</span>
+</div>
+
+<div class="legend" id="legend"></div>
+
+<div class="toolbar">
+  <input type="text" id="search" placeholder="Search by chat ID or message...">
+  <select id="typeFilter">
+    <option value="">All types</option>
+    <option value="user">Users</option>
+    <option value="chat">Groups</option>
+    <option value="channel">Channels</option>
+  </select>
+  <select id="statusFilter">
+    <option value="">All statuses</option>
+    <option value="tracked">Tracked</option>
+    <option value="ignored">Ignored</option>
+  </select>
+  <span class="stats" id="stats"></span>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th data-sort="chat_id">Chat ID</th>
+      <th data-sort="chat_type">Type</th>
+      <th data-sort="message_count">Messages</th>
+      <th data-sort="last_message_date">Last Active</th>
+      <th>Last Message</th>
+      <th data-sort="is_tracked">Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="chatList">
+    <tr><td colspan="7" class="loading">Loading chats...</td></tr>
+  </tbody>
+</table>
+
+<script>
+let allChats = [];
+let filterMode = 'default';
+let sortKey = 'last_message_date';
+let sortDir = 'desc';
+
+async function fetchConfig() {
+  const resp = await fetch('/api/config');
+  const data = await resp.json();
+  filterMode = data.filter_mode || 'default';
+  document.getElementById('modeBadge').textContent = filterMode === 'allowlist_only' ? 'Allowlist Only' : 'Default Mode';
+  updateLegend();
+}
+
+function updateLegend() {
+  const el = document.getElementById('legend');
+  if (filterMode === 'allowlist_only') {
+    el.innerHTML = `
+      <span class="legend-item"><span class="legend-dot dot-tracked"></span> Whitelisted = tracked</span>
+      <span class="legend-item"><span class="legend-dot dot-ignored"></span> Not whitelisted = ignored</span>
+    `;
+  } else {
+    el.innerHTML = `
+      <span class="legend-item"><span class="legend-dot dot-tracked"></span> Tracked (groups/users by default, channels if whitelisted)</span>
+      <span class="legend-item"><span class="legend-dot dot-ignored"></span> Ignored (channels by default, groups/users if blacklisted)</span>
+    `;
+  }
+}
+
+async function fetchChats() {
+  const resp = await fetch('/api/chats');
+  allChats = await resp.json();
+  render();
+}
+
+function timeAgo(epoch) {
+  if (!epoch) return '';
+  const diff = Math.floor(Date.now() / 1000) - epoch;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 2592000) return Math.floor(diff / 86400) + 'd ago';
+  return new Date(epoch * 1000).toLocaleDateString();
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function getStatusLabel(chat) {
+  if (chat.is_tracked) {
+    let detail = '';
+    if (chat.is_whitelisted) detail = 'whitelisted';
+    else if (filterMode === 'default' && chat.chat_type !== 'channel') detail = 'default';
+    return `<span class="status-tracked">Tracked</span>${detail ? '<span class="status-detail">' + detail + '</span>' : ''}`;
+  } else {
+    let detail = '';
+    if (chat.is_blacklisted) detail = 'blacklisted';
+    else if (filterMode === 'allowlist_only') detail = 'not whitelisted';
+    else if (chat.chat_type === 'channel') detail = 'not whitelisted';
+    return `<span class="status-ignored">Ignored</span>${detail ? '<span class="status-detail">' + detail + '</span>' : ''}`;
+  }
+}
+
+function getActions(chat) {
+  const btns = [];
+
+  if (filterMode === 'allowlist_only') {
+    // Allowlist-only: toggle whitelist on/off.
+    if (chat.is_whitelisted) {
+      btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to remove">Tracking</button>`);
+    } else {
+      btns.push(`<button class="btn btn-track" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','whitelist')" title="Add to whitelist to start tracking">Track</button>`);
+    }
+  } else {
+    // Default mode.
+    if (chat.chat_type === 'channel') {
+      // Channels: whitelist to track, remove to ignore.
+      if (chat.is_whitelisted) {
+        btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to remove">Tracking</button>`);
+      } else {
+        btns.push(`<button class="btn btn-track" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','whitelist')" title="Whitelist to start tracking">Track</button>`);
+      }
+    } else {
+      // Groups/users: tracked by default, blacklist to ignore.
+      if (chat.is_blacklisted) {
+        btns.push(`<button class="btn btn-active-ignore" onclick="clearFilter(${chat.chat_id})" title="Currently blacklisted - click to unblock">Blocked</button>`);
+      } else if (chat.is_whitelisted) {
+        // Explicitly whitelisted (unusual in default mode but possible).
+        btns.push(`<button class="btn btn-active" onclick="clearFilter(${chat.chat_id})" title="Currently whitelisted - click to return to default">Tracking</button>`);
+      } else {
+        btns.push(`<button class="btn btn-ignore" onclick="setFilter(${chat.chat_id},'${chat.chat_type}','blacklist')" title="Blacklist to stop tracking">Block</button>`);
+      }
+    }
+  }
+
+  return btns.join(' ');
+}
+
+function filterChats() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const typeF = document.getElementById('typeFilter').value;
+  const statusF = document.getElementById('statusFilter').value;
+
+  return allChats.filter(c => {
+    if (typeF && c.chat_type !== typeF) return false;
+    if (statusF === 'tracked' && !c.is_tracked) return false;
+    if (statusF === 'ignored' && c.is_tracked) return false;
+    if (search) {
+      const idStr = String(c.chat_id);
+      const msg = (c.last_message || '').toLowerCase();
+      const ident = (c.filter_identifier || '').toLowerCase();
+      if (!idStr.includes(search) && !msg.includes(search) && !ident.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function sortChats(chats) {
+  return [...chats].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (typeof av === 'boolean') { av = av ? 1 : 0; bv = bv ? 1 : 0; }
+    let cmp = 0;
+    if (av < bv) cmp = -1;
+    else if (av > bv) cmp = 1;
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+}
+
+function render() {
+  const filtered = sortChats(filterChats());
+  const tbody = document.getElementById('chatList');
+
+  const tracked = allChats.filter(c => c.is_tracked).length;
+  const ignored = allChats.length - tracked;
+  document.getElementById('stats').textContent =
+    `${allChats.length} chats (${tracked} tracked, ${ignored} ignored) \u00b7 showing ${filtered.length}`;
+
+  // Update sort indicators.
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.dataset.sort === sortKey) {
+      th.classList.add(sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No chats found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(c => `
+    <tr>
+      <td class="chat-id">${c.chat_id}</td>
+      <td><span class="type-badge type-${c.chat_type}">${c.chat_type}</span></td>
+      <td class="msg-count">${c.message_count.toLocaleString()}</td>
+      <td class="time-ago" title="${new Date(c.last_message_date * 1000).toLocaleString()}">${timeAgo(c.last_message_date)}</td>
+      <td class="preview" title="${escapeHtml(c.last_message)}">${escapeHtml(c.last_message)}</td>
+      <td>${getStatusLabel(c)}</td>
+      <td class="actions">${getActions(c)}</td>
+    </tr>
+  `).join('');
+}
+
+async function setFilter(chatId, chatType, filterType) {
+  await fetch('/api/chats/filter', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: chatId, chat_type: chatType, filter_type: filterType}),
+  });
+  await fetchChats();
+}
+
+async function clearFilter(chatId) {
+  await fetch('/api/chats/filter', {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: chatId}),
+  });
+  await fetchChats();
+}
+
+// Event listeners.
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('typeFilter').addEventListener('change', render);
+document.getElementById('statusFilter').addEventListener('change', render);
+
+document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortKey = key;
+      sortDir = key === 'last_message_date' || key === 'message_count' ? 'desc' : 'asc';
+    }
+    render();
+  });
+});
+
+// Init.
+fetchConfig().then(fetchChats);
+</script>
+</body>
+</html>
