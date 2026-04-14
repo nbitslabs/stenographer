@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"go.uber.org/zap"
 
@@ -13,16 +14,18 @@ import (
 )
 
 type MessageHandler struct {
-	queries *sqlc.Queries
-	filter  *filter.Checker
-	log     *zap.Logger
+	queries        *sqlc.Queries
+	filter         *filter.Checker
+	log            *zap.Logger
+	smartWhitelist bool
 }
 
-func NewMessageHandler(queries *sqlc.Queries, f *filter.Checker, log *zap.Logger) *MessageHandler {
+func NewMessageHandler(queries *sqlc.Queries, f *filter.Checker, log *zap.Logger, smartWhitelist bool) *MessageHandler {
 	return &MessageHandler{
-		queries: queries,
-		filter:  f,
-		log:     log,
+		queries:        queries,
+		filter:         f,
+		log:            log,
+		smartWhitelist: smartWhitelist,
 	}
 }
 
@@ -63,7 +66,23 @@ func (h *MessageHandler) processMessage(ctx context.Context, e tg.Entities, msgC
 		return nil // don't block on filter errors
 	}
 	if !ok {
-		return nil
+		// Smart auto-whitelist: if a message from an un-whitelisted channel/group
+		// is sent by someone we have DM history with, auto-whitelist the group.
+		if h.smartWhitelist && (chatType == "channel" || chatType == "chat") {
+			senderID, _ := extractFromID(msg.FromID)
+			if senderID != 0 {
+				h.trySmartWhitelist(ctx, chatID, chatType, senderID)
+				// Re-check filter after potential whitelist.
+				ok, err = h.filter.ShouldLog(ctx, chatID, chatType)
+				if err != nil || !ok {
+					return nil
+				}
+			} else {
+				return nil
+			}
+		} else {
+			return nil
+		}
 	}
 
 	senderID, senderType := extractFromID(msg.FromID)
@@ -101,6 +120,33 @@ func (h *MessageHandler) processMessage(ctx context.Context, e tg.Entities, msgC
 	)
 
 	return nil
+}
+
+// trySmartWhitelist checks if senderID has DM history and auto-whitelists the group if so.
+func (h *MessageHandler) trySmartWhitelist(ctx context.Context, chatID int64, chatType string, senderID int64) {
+	// Check if we have any DM messages with this sender.
+	count, err := h.queries.HasDMHistory(ctx, senderID)
+	if err != nil || count == 0 {
+		return
+	}
+
+	// This sender is a known contact — auto-whitelist the group.
+	err = h.queries.AddChatFilter(ctx, sqlc.AddChatFilterParams{
+		ChatID:     chatID,
+		ChatType:   chatType,
+		FilterType: "whitelist",
+		Identifier: fmt.Sprintf("auto:%d", chatID),
+		Note:       fmt.Sprintf("smart-whitelist: contact %d is a member", senderID),
+	})
+	if err != nil {
+		h.log.Warn("smart whitelist failed", zap.Int64("chat_id", chatID), zap.Error(err))
+		return
+	}
+	h.log.Info("smart auto-whitelisted group",
+		zap.Int64("chat_id", chatID),
+		zap.String("chat_type", chatType),
+		zap.Int64("trigger_sender", senderID),
+	)
 }
 
 func extractPeer(peer tg.PeerClass) (int64, string) {

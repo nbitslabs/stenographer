@@ -87,6 +87,9 @@ level = "info"
 #   or: "allowlist_only" (all chats must be explicitly whitelisted)
 [filter]
 mode = "default"
+# smart_whitelist: auto-whitelist channels/supergroups when a message is from
+# someone you have DM history with. Set to false to disable.
+# smart_whitelist = true
 `))
 
 func init() {

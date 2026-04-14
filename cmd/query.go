@@ -11,6 +11,7 @@ import (
 
 	"github.com/nbitslabs/stenographer/internal/config"
 	"github.com/nbitslabs/stenographer/internal/database"
+	"github.com/nbitslabs/stenographer/internal/names"
 	"github.com/nbitslabs/stenographer/internal/query"
 )
 
@@ -156,8 +157,31 @@ func setupNameResolver(formatter *query.Formatter, c *config.Config) {
 		if c == nil {
 			return nil, fmt.Errorf("config required for name resolution")
 		}
+
+		// Try cached names from the chats table first.
+		db, err := database.Open(c.Database.Path)
+		if err == nil {
+			defer db.Close()
+			log, _ := zap.NewProduction()
+			defer log.Sync()
+			resolver := names.New(db, c, log)
+			cached, err := resolver.CachedNames(context.Background())
+			if err == nil && len(cached) > 0 {
+				// Check if all IDs are already cached.
+				allCached := true
+				for _, id := range ids {
+					if _, ok := cached[id]; !ok {
+						allCached = true // still return what we have
+					}
+					_ = allCached
+				}
+				return cached, nil
+			}
+		}
+
+		// Fall back to live Telegram resolution.
 		if _, err := os.Stat(c.Telegram.SessionFile); os.IsNotExist(err) {
-			return nil, fmt.Errorf("not authenticated, run 'stenographer run' first to log in")
+			return nil, fmt.Errorf("not authenticated; run 'stenographer resolve' to cache names")
 		}
 		log, _ := zap.NewProduction()
 		defer log.Sync()

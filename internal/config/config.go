@@ -33,7 +33,17 @@ type LoggingConfig struct {
 }
 
 type FilterConfig struct {
-	Mode string `toml:"mode"`
+	Mode           string `toml:"mode"`
+	SmartWhitelist *bool  `toml:"smart_whitelist"`
+}
+
+// SmartWhitelistEnabled returns whether smart auto-whitelisting is enabled.
+// Defaults to true if not explicitly set.
+func (f FilterConfig) SmartWhitelistEnabled() bool {
+	if f.SmartWhitelist == nil {
+		return true
+	}
+	return *f.SmartWhitelist
 }
 
 // DefaultSearchPaths returns the ordered list of directories to search for config.toml.

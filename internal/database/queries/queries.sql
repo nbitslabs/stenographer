@@ -75,6 +75,9 @@ SELECT access_hash FROM channel_access_hash WHERE user_id = ? AND channel_id = ?
 -- name: UpsertChannelAccessHash :exec
 INSERT OR REPLACE INTO channel_access_hash (user_id, channel_id, access_hash) VALUES (?, ?, ?);
 
+-- name: HasDMHistory :one
+SELECT COUNT(*) FROM messages WHERE chat_type = 'user' AND chat_id = ? LIMIT 1;
+
 -- name: UpsertChat :exec
 INSERT INTO chats (chat_id, chat_type, title, username, updated_at)
 VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))

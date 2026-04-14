@@ -127,6 +127,17 @@ func (q *Queries) GetUpdateState(ctx context.Context, userID int64) (GetUpdateSt
 	return i, err
 }
 
+const hasDMHistory = `-- name: HasDMHistory :one
+SELECT COUNT(*) FROM messages WHERE chat_type = 'user' AND chat_id = ? LIMIT 1
+`
+
+func (q *Queries) HasDMHistory(ctx context.Context, chatID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, hasDMHistory, chatID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const isBlacklisted = `-- name: IsBlacklisted :one
 SELECT count(*) FROM chat_filters WHERE chat_id = ? AND chat_type = ? AND filter_type = 'blacklist'
 `

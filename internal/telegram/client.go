@@ -51,7 +51,7 @@ func Run(ctx context.Context, cfg *config.Config, queries *sqlc.Queries, log *za
 	})
 
 	filterChecker := filter.New(queries, cfg.Filter.Mode)
-	msgHandler := NewMessageHandler(queries, filterChecker, log)
+	msgHandler := NewMessageHandler(queries, filterChecker, log, cfg.Filter.SmartWhitelistEnabled())
 
 	dispatcher.OnNewMessage(msgHandler.HandleNewMessage)
 	dispatcher.OnNewChannelMessage(msgHandler.HandleNewChannelMessage)
